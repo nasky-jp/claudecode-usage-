@@ -151,8 +151,8 @@ def _journal_html() -> str:
     return "".join(parts) or "<p>保有中・決済済みの記録はありません。</p>"
 
 
-def generate_dashboard() -> Path:
-    now = datetime.now(JST)
+def build_sections() -> list[str]:
+    """ダッシュボードの各セクションHTMLを返す(Webアプリと静的生成の共通実装)。"""
     sections = []
 
     morning = _latest("*_morning_check.md")
@@ -177,8 +177,15 @@ def generate_dashboard() -> Path:
         sections.append(_section("🎯 予測スコアカード", f"<p>集計エラー: {html.escape(str(e))}</p>"))
 
     sections.append(_section("📒 トレード日誌", _journal_html()))
+    return sections
 
-    page = f"""<!DOCTYPE html>
+
+def render_page(extra_html: str = "", subtitle: str = "") -> str:
+    """完全なHTMLページを組み立てる。extra_html は先頭(タイトル直下)に挿入される。"""
+    now = datetime.now(JST)
+    sections = build_sections()
+    sub = subtitle or "このページは自動生成。元データ: reports/ 内の各ファイル"
+    return f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -188,13 +195,17 @@ def generate_dashboard() -> Path:
 </head>
 <body>
 <h1>📈 Market Flow ダッシュボード</h1>
-<p class="meta">生成: {now.strftime('%Y-%m-%d %H:%M JST')} — このページは自動生成(毎回上書き)。元データ: reports/ 内の各ファイル</p>
+<p class="meta">生成: {now.strftime('%Y-%m-%d %H:%M JST')} — {html.escape(sub)}</p>
+{extra_html}
 {''.join(sections)}
 </body>
 </html>
 """
+
+
+def generate_dashboard() -> Path:
     out = reports_dir() / "dashboard.html"
-    out.write_text(page, encoding="utf-8")
+    out.write_text(render_page(), encoding="utf-8")
     return out
 
 

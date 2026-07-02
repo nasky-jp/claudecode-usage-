@@ -4,5 +4,6 @@ __pycache__/
 *.pyo
 market_flow/reports/
 market_flow/journal/
+market_flow/config.json
 *.egg-info/
 .venv/

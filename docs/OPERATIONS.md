@@ -4,6 +4,51 @@ Market Flow の日次・週次の定型手順。**考えることを減らすた
 
 ---
 
+## 推奨: Webアプリで完全自動化(v2)
+
+```bash
+export ANTHROPIC_API_KEY=your_key
+python3 -m market_flow.webapp     # http://127.0.0.1:8035
+```
+
+これ1プロセスを起動しておくだけで、以下がすべて自動で回る:
+
+| ジョブ | スケジュール | 課金 |
+|---|---|---|
+| 🌙 夜間分析 | 平日 22:00 | あり(1回数円) |
+| ☀️ 朝の確認+監視リスト+ダッシュボード | 平日 08:00 | あり(1回数円) |
+| 🎯 予測の答え合わせ | 平日 16:30 | なし |
+| 📝 週次レビュー | 土 10:00 | あり(1回数円) |
+
+- 画面から **トレード記録・決済・手動実行・過去レポート閲覧** ができる
+- **キャッチアップ実行**: PCが止まっていても、予定時刻から4時間以内に起動すれば未実行分が走る(systemd timer の `Persistent=true` 相当)
+- **ハートビート**: 各ジョブの最終実行と成否が画面最上部に出る。「自動化が静かに死んでいた」を毎朝検知できる
+- 時刻・有効/無効の変更: `market_flow/config.example.json` を `market_flow/config.json` にコピーして編集
+- 自動実行なしで画面だけ使う: `MARKET_FLOW_NO_SCHEDULER=1 python3 -m market_flow.webapp`
+- **127.0.0.1 のみにバインド**している。外部公開(0.0.0.0や公開サーバー)にしないこと(認証なしのため)
+
+### 常駐させる(macOS/Linux)
+
+ログイン時に自動起動したい場合は systemd (Linux) / launchd (macOS) に登録する。Linux例:
+
+```ini
+# ~/.config/systemd/user/market-flow.service
+[Unit]
+Description=Market Flow webapp
+
+[Service]
+Environment=ANTHROPIC_API_KEY=your_key
+WorkingDirectory=/home/user/claudecode-usage-
+ExecStart=/usr/bin/python3 -m market_flow.webapp
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+`systemctl --user enable --now market-flow` で常駐。cron派は下記「cron設定」も引き続き使える。
+
+---
+
 ## 毎日の流れ
 
 ### 夜(22:00) — 自動実行(cron設定済みの場合)/手動なら3分
@@ -33,16 +78,21 @@ cd /home/user/claudecode-usage- && python3 -m market_flow.morning_check
 
 ### 引け後(15:30以降) — 人間1分
 
-売買した日だけ:
+売買した日だけ。Webアプリのフォームから記録するか、CLIで:
 ```bash
 python3 -m market_flow.journal add 8035 --side buy --qty 100 --price 25000 \
+  --stop 24500 --setup "セクター順張り" --grade A --plan on \
   --name 東京エレクトロン --sector 半導体 --reason "夜間TOP1・寄りギャップ小"
 # 決済した場合
 python3 -m market_flow.journal close <ID> --price 25800
 ```
 Claude Code なら「東京エレクトロン100株25000円で買ったのを記録して」でOK(trade-journal Skill)。
 
-**--reason は必ず書く。** 週次振り返りで一番効く項目。
+**記録のコツ(トレードジャーナルの定石):**
+- **--reason は必ず書く。** 週次振り返りで一番効く項目。
+- **--stop(損切りライン)を書くと R-multiple が自動計算される。** 損益を「リスク1単位あたり何倍か」で標準化でき、銘柄や株数が違うトレード同士を比較できる。
+- **--plan on/off**(事前計画どおりか、衝動エントリーか)を付けると、summary で計画外トレードの損失比率が見える。多くのトレーダーは損失の6〜7割が計画外トレードから出る。
+- **--setup + --grade(A/B/C)** を続けると「A評価セットアップだけ期待値プラス」のような発見ができる(目安50トレード以上)。
 
 ## 毎週の流れ(週末15分)
 
@@ -104,7 +154,8 @@ python3 -m market_flow.journal summary --month 2026-06
 
 | 症状 | 対応 |
 |---|---|
-| レポートが「取得失敗」だらけ | yfinance側の一時障害が多い。1時間後に手動再実行。続くなら `pip install -U yfinance` |
+| レポートが「取得失敗」だらけ | yfinance側の一時障害が多い。1時間後に手動再実行。続くなら `pip install -U yfinance`。恒常的に不安定なら日本株はJPX公式の [J-Quants API](https://jpx-jquants.com/)(無料プランあり)への移行を検討(KAIZEN_PLAN候補) |
+| Webアプリのジョブが「未実行」のまま | アプリが落ちていないか確認。予定時刻から4時間超は安全のため自動キャッチアップしない→「今すぐ実行」で手動実行 |
 | `ANTHROPIC_API_KEY が設定されていません` | `export ANTHROPIC_API_KEY=...` を設定。キーは**このリポジトリに書かない**(.envは.gitignore済み) |
 | scorecard score が「翌営業日のデータ未達」 | 正常。翌営業日の引け後に再実行すれば採点される |
 | 監視リストが「ユニバース未登録」 | `universe.py` にセクターが無い。`match_sector` のエイリアスに追加 |

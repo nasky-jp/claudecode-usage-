@@ -111,6 +111,55 @@ def t_journal():
     assert journal.main(["list"]) == 0
 
 
+@check("journal: R-multiple・期待値・セットアップ/計画タグ")
+def t_journal_r_multiple():
+    from market_flow import journal
+    # 建値25000, 損切り24500 → 1R = 500円/株。25800決済 → +800/500 = +1.6R
+    trade = journal.add_trade("6857", "buy", 100, 25000, stop=24500,
+                              setup="セクター順張り", grade="a", plan="on")
+    assert trade["grade"] == "A"
+    closed, err = journal.close_trade(int(trade["id"]), 25800)
+    assert err is None
+    assert closed["r_multiple"] == "1.60", closed["r_multiple"]
+    stats = journal.summary_stats(
+        [t for t in journal.load_trades() if t["status"] == "closed"])
+    assert stats["expectancy"] > 0
+    assert stats["expectancy_r"] == 1.60
+    # 決済済みの二重決済はエラー
+    _, err2 = journal.close_trade(int(trade["id"]), 26000)
+    assert err2 is not None
+
+
+@check("scheduler: 実行判定(時刻/曜日/キャッチアップ/1日1回)")
+def t_scheduler_due():
+    from datetime import datetime
+    from market_flow.scheduler import _is_due, JST
+    cfg = {"enabled": True, "days": [0, 1, 2, 3, 4], "time": "08:00"}
+    wed_9 = datetime(2026, 7, 1, 9, 0, tzinfo=JST)    # 水曜9時
+    assert _is_due("morning", cfg, {}, wed_9, 4)                       # 未実行→実行
+    state_done = {"morning": {"last_run_date": "2026-07-01"}}
+    assert not _is_due("morning", cfg, state_done, wed_9, 4)           # 実行済み→しない
+    wed_7 = datetime(2026, 7, 1, 7, 0, tzinfo=JST)
+    assert not _is_due("morning", cfg, {}, wed_7, 4)                   # 時刻前→しない
+    wed_13 = datetime(2026, 7, 1, 13, 0, tzinfo=JST)
+    assert not _is_due("morning", cfg, {}, wed_13, 4)                  # 期限切れ→しない
+    sun_9 = datetime(2026, 7, 5, 9, 0, tzinfo=JST)
+    assert not _is_due("morning", cfg, {}, sun_9, 4)                   # 日曜→しない
+    assert not _is_due("morning", {**cfg, "enabled": False}, {}, wed_9, 4)
+
+
+@check("webapp: ページ生成・フォーム・レポート閲覧(サーバ起動なし)")
+def t_webapp():
+    from market_flow import webapp
+    page = webapp._page(msg="テストメッセージ")
+    assert "自動実行ステータス" in page
+    assert "トレード記録" in page
+    assert "テストメッセージ" in page
+    assert "<script" not in page.lower().replace("onsubmit", "")  # 外部JSなし
+    listing = webapp.report_list()
+    assert "レポート一覧" in listing
+
+
 @check("scorecard: 合成データで採点→CSV蓄積→再実行で重複しない")
 def t_scorecard():
     from market_flow.paths import reports_dir
@@ -190,6 +239,7 @@ def t_weekly_review():
 def main() -> int:
     print(f"オフラインセルフテスト開始 (一時ディレクトリ: {_TMP})\n")
     for fn in [t_universe_keys, t_match_sector, t_parse_top_sectors, t_journal,
+               t_journal_r_multiple, t_scheduler_due, t_webapp,
                t_scorecard, t_screener, t_build_extras, t_dashboard,
                t_weekly_review]:
         fn()

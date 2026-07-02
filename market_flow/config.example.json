@@ -1,0 +1,11 @@
+{
+  "_comment": "market_flow/config.json にコピーして編集。無ければこのデフォルト値で動く。",
+  "port": 8035,
+  "catchup_hours": 4,
+  "jobs": {
+    "night":     {"enabled": true, "days": [0, 1, 2, 3, 4], "time": "22:00"},
+    "morning":   {"enabled": true, "days": [0, 1, 2, 3, 4], "time": "08:00"},
+    "scorecard": {"enabled": true, "days": [0, 1, 2, 3, 4], "time": "16:30"},
+    "weekly":    {"enabled": true, "days": [5],             "time": "10:00"}
+  }
+}

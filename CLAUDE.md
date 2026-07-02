@@ -3,7 +3,14 @@
 日本株トレーダー(兼業)向け定期マーケット分析システム。
 運用手順の詳細は `docs/OPERATIONS.md`、改善ロードマップは `docs/KAIZEN_PLAN.md` を参照。
 
-## 定期実行コマンド
+## Webアプリ(推奨・完全自動化)
+
+```bash
+python3 -m market_flow.webapp    # http://127.0.0.1:8035 (127.0.0.1限定バインド)
+```
+起動しておくだけで夜間分析(平日22時)→朝チェック(平日8時)→答え合わせ(平日16:30)→週次レビュー(土10時)が自動実行される(キャッチアップ・ハートビート付き)。画面からトレード記録・手動実行・レポート閲覧が可能。設定は `market_flow/config.example.json` を `config.json` にコピーして変更。自動実行を止める: `MARKET_FLOW_NO_SCHEDULER=1`。
+
+## 定期実行コマンド(CLI単体でも可)
 
 ### 夜間分析（平日22時）
 ```bash
@@ -32,9 +39,10 @@ python3 -m market_flow.weekly_review
 ## 補助ツール
 
 ```bash
-python3 -m market_flow.journal add <code> --side buy --qty 100 --price 25000 --reason "..."  # トレード記録
-python3 -m market_flow.journal close <ID> --price <価格>   # 決済
-python3 -m market_flow.journal summary                     # 成績
+python3 -m market_flow.journal add <code> --side buy --qty 100 --price 25000 \
+  --stop 24500 --setup "セクター順張り" --grade A --plan on --reason "..."  # トレード記録(R計算対応)
+python3 -m market_flow.journal close <ID> --price <価格>   # 決済(R-multiple自動計算)
+python3 -m market_flow.journal summary                     # 成績(期待値/R/セットアップ別/計画内外)
 python3 -m market_flow.screener                            # 監視リスト単体生成
 python3 -m market_flow.dashboard                           # ダッシュボード再生成
 python3 -m market_flow.selftest                            # オフライン回帰テスト(ネットワーク・API不要)
