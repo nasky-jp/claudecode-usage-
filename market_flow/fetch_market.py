@@ -1,5 +1,7 @@
 """Market data fetcher: NASDAQ, USD/JPY, Nikkei Futures, GOLD"""
 
+import time
+
 import yfinance as yf
 from datetime import datetime, timezone, timedelta
 
@@ -9,6 +11,7 @@ SYMBOLS = {
     "NASDAQ":        ("^IXIC",   "NASDAQ総合指数"),
     "USDJPY":        ("USDJPY=X", "ドル円"),
     "NIKKEI_FUTURES":("^N225",   "日経225(現物参考)"),
+    "NIKKEI_FUT_CME":("NKD=F",   "日経225先物(CME)"),
     "GOLD":          ("GC=F",    "GOLD先物"),
     "SP500":         ("^GSPC",   "S&P500"),
     "DOW":           ("^DJI",    "NYダウ"),
@@ -30,23 +33,57 @@ SECTOR_ETFS = {
 }
 
 
-def fetch_ticker(symbol: str, period: str = "5d") -> dict:
-    try:
-        t = yf.Ticker(symbol)
-        hist = t.fast_info
-        info = {
-            "last_price": getattr(hist, "last_price", None),
-            "previous_close": getattr(hist, "previous_close", None),
-        }
-        # fallback via history
-        if info["last_price"] is None:
-            df = t.history(period=period, interval="1d")
+def fetch_ticker(symbol: str, period: str = "5d", retries: int = 2) -> dict:
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            t = yf.Ticker(symbol)
+            hist = t.fast_info
+            info = {
+                "last_price": getattr(hist, "last_price", None),
+                "previous_close": getattr(hist, "previous_close", None),
+            }
+            # fallback via history
+            if info["last_price"] is None:
+                df = t.history(period=period, interval="1d")
+                if not df.empty:
+                    info["last_price"] = float(df["Close"].iloc[-1])
+                    info["previous_close"] = float(df["Close"].iloc[-2]) if len(df) >= 2 else None
+            if info["last_price"] is not None:
+                return info
+            last_error = "no data returned"
+        except Exception as e:
+            last_error = str(e)
+        if attempt < retries:
+            time.sleep(2 ** attempt)  # 1s, 2s
+    return {"last_price": None, "previous_close": None, "error": last_error}
+
+
+def fetch_daily_history(symbol: str, period: str = "1mo", retries: int = 2) -> list[dict]:
+    """日足履歴を [{date, open, close, volume}, ...] で返す(古い順)。
+
+    スコアカード/スクリーナー用。失敗時は空リスト。
+    """
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            df = yf.Ticker(symbol).history(period=period, interval="1d")
             if not df.empty:
-                info["last_price"] = float(df["Close"].iloc[-1])
-                info["previous_close"] = float(df["Close"].iloc[-2]) if len(df) >= 2 else None
-        return info
-    except Exception as e:
-        return {"last_price": None, "previous_close": None, "error": str(e)}
+                return [
+                    {
+                        "date": idx.strftime("%Y-%m-%d"),
+                        "open": float(row["Open"]),
+                        "close": float(row["Close"]),
+                        "volume": float(row.get("Volume", 0) or 0),
+                    }
+                    for idx, row in df.iterrows()
+                ]
+            last_error = "empty history"
+        except Exception as e:
+            last_error = str(e)
+        if attempt < retries:
+            time.sleep(2 ** attempt)
+    return []
 
 
 def calc_change(current, prev) -> tuple[float | None, str]:

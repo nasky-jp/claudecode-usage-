@@ -3,5 +3,6 @@ __pycache__/
 *.pyc
 *.pyo
 market_flow/reports/
+market_flow/journal/
 *.egg-info/
 .venv/

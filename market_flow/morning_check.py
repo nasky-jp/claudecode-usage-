@@ -10,9 +10,10 @@ import anthropic
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from market_flow.fetch_market import fetch_all, format_market_summary
+from market_flow.paths import reports_dir
 
 JST = timezone(timedelta(hours=9))
-REPORTS_DIR = Path(__file__).parent / "reports"
+REPORTS_DIR = reports_dir()
 
 MORNING_PROMPT = """昨夜の分析予測と、現在の朝の市場データを比較してください。
 
@@ -40,6 +41,42 @@ MORNING_PROMPT = """昨夜の分析予測と、現在の朝の市場データを
 ### ⚠️ 変化した点・注意事項
 （昨夜から状況が変わった点があれば）
 """
+
+
+def build_extras(night_report: dict | None) -> str:
+    """監視リスト(スクリーナー)と保有ポジションのリマインダーを組み立てる。
+
+    どちらも失敗しても朝チェック本体は止めない。
+    """
+    parts = []
+
+    try:
+        sectors = (night_report or {}).get("top_sectors")
+        if not sectors and night_report:
+            from market_flow.analyze_night import parse_top_sectors
+            sectors = parse_top_sectors(night_report.get("analysis", ""))
+        if sectors:
+            from market_flow.screener import build_watchlist
+            parts.append(build_watchlist(sectors))
+    except Exception as e:
+        parts.append(f"## 🔍 朝の監視リスト\n\n生成に失敗しました: {e}")
+
+    try:
+        from market_flow.journal import load_trades
+        open_trades = [t for t in load_trades() if t["status"] == "open"]
+        if open_trades:
+            lines = ["## 📒 保有中ポジション(日誌より)"]
+            for t in open_trades:
+                side = "買" if t["side"] == "buy" else "売"
+                lines.append(f"- #{t['id']} {t['code']} {t['name']} {side} "
+                             f"{t['qty']}株 @ {t['entry_price']}円  ({t['reason']})")
+            lines.append("")
+            lines.append("> 決済したら `python3 -m market_flow.journal close <ID> --price <価格>`")
+            parts.append("\n".join(lines))
+    except Exception:
+        pass
+
+    return "\n\n---\n\n".join(parts)
 
 
 def load_last_night_report() -> dict | None:
@@ -96,6 +133,11 @@ def run_morning_check():
     md_content = f"# 朝の確認サマリー\n**確認日時**: {now.strftime('%Y-%m-%d %H:%M JST')}\n\n"
     md_content += morning_summary + "\n\n---\n\n"
     md_content += morning_summary_text
+
+    extras = build_extras(night_report)
+    if extras:
+        md_content += "\n\n---\n\n" + extras
+
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_content)
 
@@ -103,6 +145,13 @@ def run_morning_check():
     print(md_content)
     print(f"{'='*60}")
     print(f"\nレポート保存: {md_path}")
+
+    try:
+        from market_flow.dashboard import generate_dashboard
+        dash_path = generate_dashboard()
+        print(f"ダッシュボード更新: {dash_path}")
+    except Exception as e:
+        print(f"⚠️  ダッシュボード生成に失敗: {e}")
 
 
 if __name__ == "__main__":
