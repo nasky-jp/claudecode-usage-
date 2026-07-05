@@ -22,6 +22,9 @@ on:
         type: choice
         options: [night, morning, scorecard, weekly, screener-test]
         default: scorecard
+  push:
+    branches: [claude/workflow-automation-strategy-kcjke5]
+    paths: ['.github/run-job']
 
 permissions:
   contents: write
@@ -35,7 +38,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Pick job from schedule
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: claude/workflow-automation-strategy-kcjke5
+
+      - name: Pick job (schedule / dispatch / trigger-file push)
         id: pick
         run: |
           case "${{ github.event.schedule }}" in
@@ -43,15 +51,19 @@ jobs:
             '0 23 * * 0-4') JOB=morning ;;
             '30 7 * * 1-5') JOB=scorecard ;;
             '0 1 * * 6')    JOB=weekly ;;
-            *)              JOB='${{ inputs.job }}' ;;
+            *)
+              if [ "${{ github.event_name }}" = "push" ]; then
+                JOB=$(head -1 .github/run-job | tr -d '[:space:]')
+              else
+                JOB='${{ inputs.job }}'
+              fi ;;
+          esac
+          case "$JOB" in
+            night|morning|scorecard|weekly|screener-test) ;;
+            *) echo "unknown job: $JOB" >&2; exit 1 ;;
           esac
           echo "job=$JOB" >> "$GITHUB_OUTPUT"
           echo "Selected job: $JOB"
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: claude/workflow-automation-strategy-kcjke5
 
       - name: Checkout data branch
         uses: actions/checkout@v4
