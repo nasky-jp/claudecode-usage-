@@ -7,8 +7,8 @@
     "detail": ""
   },
   "morning": {
-    "last_run_date": "2026-07-29",
-    "last_run_at": "2026-07-29 08:58:07",
+    "last_run_date": "2026-07-30",
+    "last_run_at": "2026-07-30 09:00:16",
     "trigger": "github-actions",
     "status": "skipped",
     "detail": "ANTHROPIC_API_KEY未設定のためスキップ"
