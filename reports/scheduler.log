@@ -391,3 +391,6 @@
 [2026-10-17 02:14:08] night: skipped (APIキー未設定)
 [2026-10-17 14:07:33] weekly: skipped (APIキー未設定)
 [2026-10-19 09:52:15] morning: skipped (APIキー未設定)
+[2026-10-19 23:49:31] scorecard: 開始 (github-actions)
+[2026-10-19 23:49:33] scorecard: 完了
+  | 採点待ちのレポートはありません。
