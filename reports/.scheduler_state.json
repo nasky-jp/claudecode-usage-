@@ -14,8 +14,8 @@
     "detail": "ANTHROPIC_API_KEY未設定のためスキップ"
   },
   "night": {
-    "last_run_date": "2026-11-11",
-    "last_run_at": "2026-11-11 05:20:40",
+    "last_run_date": "2026-11-12",
+    "last_run_at": "2026-11-12 05:03:47",
     "trigger": "github-actions",
     "status": "skipped",
     "detail": "ANTHROPIC_API_KEY未設定のためスキップ"
