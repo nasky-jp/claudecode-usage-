@@ -1,7 +1,7 @@
 {
   "scorecard": {
-    "last_run_date": "2026-11-17",
-    "last_run_at": "2026-11-17 02:13:24",
+    "last_run_date": "2026-11-18",
+    "last_run_at": "2026-11-18 01:58:47",
     "trigger": "github-actions",
     "status": "ok",
     "detail": ""
